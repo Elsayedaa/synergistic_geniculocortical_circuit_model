@@ -14,7 +14,6 @@ class SGCCircuit(tf.Module):
             a0, a1, ats0, ats1,
             d0, d1, 
             inh_w0, inh_w1,
-            mode = 'loaded',
             n_sample = 1,
     ):
         super().__init__(name = 'SGCC')
@@ -34,109 +33,134 @@ class SGCCircuit(tf.Module):
         into a particular V1 unit and must be the same for the corresponding
         inhibitory inputs. 
         """
-        self.t0 = tf.Variable(self.variable_initializer(t0, mode), dtype = DTYPE, trainable =  True,
-                              name = 'V1_0 input Latency') # latency of the initial response in V1 #1 inputs
-        
-        self.t1 = tf.Variable(self.variable_initializer(t1, mode), dtype = DTYPE, trainable = True,
-                              name = 'V1_1 input Latency') # latency of the initial response in V1 #2 inputs
+        self.t0_lower, self.t0_upper = t0
+        self.t0 = tf.Variable(
+            self.variable_initializer(), dtype=DTYPE, trainable=True,
+            name='V1_0 input Latency'
+        )
+
+        self.t1_lower, self.t1_upper = t1
+        self.t1 = tf.Variable(
+            self.variable_initializer(), dtype=DTYPE, trainable=True,
+            name='V1_1 input Latency'
+        )
         #################################################################
 
         #### Inhibition delay ####
-        """
-        The inhibition delays must be the same for each dLGN unit
-        into a particular V1 unit and must be the same for the corresponding
-        inhibitory inputs. 
-        """
-        self.inh_d0 = tf.Variable(self.variable_initializer(inh_d0, mode), dtype = DTYPE, trainable =  True,
-                                  name = 'V1_0 inhibition delay') # inhibition delay of the initial response in V1 #1 inputs
-        self.inh_d1 = tf.Variable(self.variable_initializer(inh_d1, mode), dtype = DTYPE, trainable =  True, 
-                                  name = 'V1_1 inhibition delay') # inhibition delay of the initial response in V1 #2 inputs
+        self.inh_d0_lower, self.inh_d0_upper = inh_d0
+        self.inh_d0 = tf.Variable(
+            self.variable_initializer(), dtype=DTYPE, trainable=True,
+            name='V1_0 inhibition delay'
+        )
+
+        self.inh_d1_lower, self.inh_d1_upper = inh_d1
+        self.inh_d1 = tf.Variable(
+            self.variable_initializer(), dtype=DTYPE, trainable=True,
+            name='V1_1 inhibition delay'
+        )
         #################################################################
 
         #### Frequency-time slopes ####
-        """
-        The frequency-time slopes can vary for each dLGN unit into a particular
-        V1 unit but inhibitory slopes must be the same as the excitatory slopes.
-        Relu applied to keep positive.
-        """
-        self.fts0_1 = tf.Variable(self.variable_initializer(fts0_1, mode),
-                                  dtype = DTYPE, trainable = True, constraint = tf.nn.relu,
-                                  name = 'dLGN1 into V1_0 - frequency-time slope') # frequency-time slope of dLGN#1 into V1#1
-        self.fts0_2 = tf.Variable(self.variable_initializer(fts0_2, mode), 
-                                  dtype = DTYPE, trainable = True, constraint = tf.nn.relu,
-                                  name = 'dLGN2 into V1_0 - frequency-time slope') # frequency-time slope of dLGN#2 into V1#1
-        self.fts0_3 = tf.Variable(self.variable_initializer(fts0_3, mode), 
-                                  dtype = DTYPE, trainable =  True, constraint = tf.nn.relu,
-                                  name = 'dLGN3 into V1_0 - frequency-time slope') # frequency-time slope of dLGN#3 into V1#1
+        self.fts0_1_lower, self.fts0_1_upper = fts0_1
+        self.fts0_1 = tf.Variable(
+            self.variable_initializer(), dtype=DTYPE, trainable=True,
+            name='dLGN1 into V1_0 - frequency-time slope'
+        )
 
-        self.fts1_1 = tf.Variable(self.variable_initializer(fts1_1, mode), 
-                                  dtype = DTYPE, trainable = True, constraint = tf.nn.relu,
-                                  name = 'dLGN1 into V1_1 - frequency-time slope') # frequency-time slope of dLGN#4 into V1#2
-        self.fts1_2 = tf.Variable(self.variable_initializer(fts1_2, mode), 
-                                  dtype = DTYPE, trainable = True, constraint = tf.nn.relu,
-                                  name = 'dLGN2 into V1_1 - frequency-time slope') # frequency-time slope of dLGN#5 into V1#2
-        self.fts1_3 = tf.Variable(self.variable_initializer(fts1_3, mode), 
-                                  dtype = DTYPE, trainable = True, constraint = tf.nn.relu,
-                                  name = 'dLGN3 into V1_1 - frequency-time slope') # frequency-time slope of dLGN#6 into V1#2
+        self.fts0_2_lower, self.fts0_2_upper = fts0_2
+        self.fts0_2 = tf.Variable(
+            self.variable_initializer(), dtype=DTYPE, trainable=True,
+            name='dLGN2 into V1_0 - frequency-time slope'
+        )
+
+        self.fts0_3_lower, self.fts0_3_upper = fts0_3
+        self.fts0_3 = tf.Variable(
+            self.variable_initializer(), dtype=DTYPE, trainable=True,
+            name='dLGN3 into V1_0 - frequency-time slope'
+        )
+
+        self.fts1_1_lower, self.fts1_1_upper = fts1_1
+        self.fts1_1 = tf.Variable(
+            self.variable_initializer(), dtype=DTYPE, trainable=True,
+            name='dLGN1 into V1_1 - frequency-time slope'
+        )
+
+        self.fts1_2_lower, self.fts1_2_upper = fts1_2
+        self.fts1_2 = tf.Variable(
+            self.variable_initializer(), dtype=DTYPE, trainable=True,
+            name='dLGN2 into V1_1 - frequency-time slope'
+        )
+
+        self.fts1_3_lower, self.fts1_3_upper = fts1_3
+        self.fts1_3 = tf.Variable(
+            self.variable_initializer(), dtype=DTYPE, trainable=True,
+            name='dLGN3 into V1_1 - frequency-time slope'
+        )
         #################################################################
 
         #### Initial response amplitude ####
-        """
-        The initial response amplitudes must be the same for each dLGN unit into a particular
-        V1 unit and must be the same for the corresponding inhibitory inputs. Relu applied to
-        keep positive.
-        """
-        self.a0 = tf.Variable(self.variable_initializer(a0, mode), 
-                              dtype = DTYPE, trainable = True, constraint = tf.nn.relu,
-                              name = 'V1_0 input amplitude') # initial amplitude of dLGN inputs into V1 #1
-        self.a1 = tf.Variable(self.variable_initializer(a1, mode), 
-                              dtype = DTYPE, trainable = True, constraint = tf.nn.relu,
-                              name = 'V1_1 input amplitude') # initial amplitude of dLGN inputs into V1 #2
+        self.a0_lower, self.a0_upper = a0
+        self.a0 = tf.Variable(
+            self.variable_initializer(), dtype=DTYPE, trainable=True,
+            name='V1_0 input amplitude'
+        )
+
+        self.a1_lower, self.a1_upper = a1
+        self.a1 = tf.Variable(
+            self.variable_initializer(), dtype=DTYPE, trainable=True,
+            name='V1_1 input amplitude'
+        )
         #################################################################
 
         #### Amplitude-time slopes ####
-        """
-        The amplitude-time slopes must be the same for each dLGN unit into a particular
-        V1 unit and must be the same for the corresponding inhibitory inputs.
-        """
-        self.ats0 = tf.Variable(self.variable_initializer(ats0, mode), 
-                                dtype = DTYPE, trainable = True, constraint = lambda x: tf.clip_by_value(x, -4, 0),
-                                name = 'V1_0 input amplitude-time slope') # amplitude-time slope of dLGN inputs into V1 #1
-        self.ats1 = tf.Variable(self.variable_initializer(ats1, mode), 
-                                dtype = DTYPE, trainable = True, constraint = lambda x: tf.clip_by_value(x, -4, 0),
-                                name = 'V1_1 input amplitude-time slope') # amplitude-time slope of dLGN inputs into V1 #2
+        self.ats0_lower, self.ats0_upper = ats0
+        self.ats0 = tf.Variable(
+            self.variable_initializer(), dtype=DTYPE, trainable=True,
+            name='V1_0 input amplitude-time slope'
+        )
+
+        self.ats1_lower, self.ats1_upper = ats1
+        self.ats1 = tf.Variable(
+            self.variable_initializer(), dtype=DTYPE, trainable=True,
+            name='V1_1 input amplitude-time slope'
+        )
 
         #### Initial response duration ####
-        """
-        The initial response durations must be the same for each dLGN unit into a particular
-        V1 unit and must be the same for the corresponding inhibitory inputs.
-        """
-        self.d0 = tf.Variable(self.variable_initializer(d0, mode), 
-                              dtype = DTYPE, trainable = True, constraint = tf.nn.relu,
-                              name = 'V1_0 input duration') # initial duration of dLGN inputs into V1 #1
-        self.d1 = tf.Variable(self.variable_initializer(d1, mode), 
-                              dtype = DTYPE, trainable = True, constraint = tf.nn.relu,
-                              name = 'V1_1 input duration') # initial duration of dLGN inputs into V1 #2
-        
-        #### Inhibition weight ####
-        """
-        The inhibition weight is a single variable applied to the inhibitory component of each V1 unit.
-        """
-        self.inh_w0 = tf.Variable(self.variable_initializer(inh_w0, mode), 
-                              dtype = DTYPE, trainable = True, constraint = tf.nn.relu,
-                              name = 'V1_0 inhibition weight') # inhibition weight applied to V1 #1
-        self.inh_w1 = tf.Variable(self.variable_initializer(inh_w1, mode), 
-                              dtype = DTYPE, trainable = True, constraint = tf.nn.relu,
-                              name = 'V1_1 inhibition weight') # inhibition weight applied to V1 #2
-        self.update_variables()
+        self.d0_lower, self.d0_upper = d0
+        self.d0 = tf.Variable(
+            self.variable_initializer(), dtype=DTYPE, trainable=True,
+            name='V1_0 input duration'
+        )
 
-    def variable_initializer(self, x, mode):
-        if mode == 'random':
-            ## Broadcast 
-            return tf.Variable(tf.random.uniform([self.n_sample, 1], minval = x[0], maxval = x[1]))[:, None, :]
-        
-        if mode == 'loaded':
-            return tf.cast(tf.fill([1,1,1], x), dtype = DTYPE)
+        self.d1_lower, self.d1_upper = d1
+        self.d1 = tf.Variable(
+            self.variable_initializer(), dtype=DTYPE, trainable=True,
+            name='V1_1 input duration'
+        )
+
+        #### Inhibition weight ####
+        self.inh_w0_lower, self.inh_w0_upper = inh_w0
+        self.inh_w0 = tf.Variable(
+            self.variable_initializer(), dtype=DTYPE, trainable=True,
+            name='V1_0 inhibition weight'
+        )
+
+        self.inh_w1_lower, self.inh_w1_upper = inh_w1
+        self.inh_w1 = tf.Variable(
+            self.variable_initializer(), dtype=DTYPE, trainable=True,
+            name='V1_1 inhibition weight'
+        )
+
+        ## Apply transformation to all variables
+        self.update_transform()
+
+    def variable_transformer(self, x, lower, upper):
+        transformed = lower + (upper - lower) * tf.sigmoid(x)
+        return transformed
+
+    def variable_initializer(self):
+        scaled = tf.random.normal([self.n_sample, 1, 1], mean = 0, stddev = 1)
+        return scaled
 
     def gaussian(
         self,
@@ -177,30 +201,33 @@ class SGCCircuit(tf.Module):
     def predict(
             self,
             sfs,
-            tracking = False
     ):
         # reshape the SF input to broadcast across multiple exploration samples
         sfs = tf.reshape(sfs, [1,-1,1])
 
+        # Transform the scaled variables before doing calculations
+        self.update_transform()
+
         # V1 Neuron 1 - excitatory dLGN inputs
-        self.dlgn0_1e = self.frf(sfs, self.fts0_1, self.t0, self.ats0, self.a0, self.d0)
-        self.dlgn0_2e = self.frf(sfs, self.fts0_2, self.t0, self.ats0, self.a0, self.d0)
-        self.dlgn0_3e = self.frf(sfs, self.fts0_3, self.t0, self.ats0, self.a0, self.d0)
+        self.dlgn0_1e = self.frf(sfs, self.params['fts0_1'][0], self.params['t0'][0], self.params['ats0'][0], self.params['a0'][0], self.params['d0'][0])
+        self.dlgn0_2e = self.frf(sfs, self.params['fts0_2'][0], self.params['t0'][0], self.params['ats0'][0], self.params['a0'][0], self.params['d0'][0])
+        self.dlgn0_3e = self.frf(sfs, self.params['fts0_3'][0], self.params['t0'][0], self.params['ats0'][0], self.params['a0'][0], self.params['d0'][0])
 
         # V1 Neuron 1 - inhibitory dLGN inputs
-        self.dlgn0_1i = self.frf(sfs, self.fts0_1, self.t0 + self.inh_d0, self.ats0, self.a0, self.d0)
-        self.dlgn0_2i = self.frf(sfs, self.fts0_2, self.t0 + self.inh_d0, self.ats0, self.a0, self.d0)
-        self.dlgn0_3i = self.frf(sfs, self.fts0_3, self.t0 + self.inh_d0, self.ats0, self.a0, self.d0)
+        self.dlgn0_1i = self.frf(sfs, self.params['fts0_1'][0], self.params['t0'][0] + self.params['inh_d0'][0], self.params['ats0'][0], self.params['a0'][0], self.params['d0'][0])
+        self.dlgn0_2i = self.frf(sfs, self.params['fts0_2'][0], self.params['t0'][0] + self.params['inh_d0'][0], self.params['ats0'][0], self.params['a0'][0], self.params['d0'][0])
+        self.dlgn0_3i = self.frf(sfs, self.params['fts0_3'][0], self.params['t0'][0] + self.params['inh_d0'][0], self.params['ats0'][0], self.params['a0'][0], self.params['d0'][0])
 
         # V1 Neuron 2 - excitatory dLGN inputs
-        self.dlgn1_1e = self.frf(sfs, self.fts1_1, self.t1, self.ats1, self.a1, self.d1)
-        self.dlgn1_2e = self.frf(sfs, self.fts1_2, self.t1, self.ats1, self.a1, self.d1)
-        self.dlgn1_3e = self.frf(sfs, self.fts1_3, self.t1, self.ats1, self.a1, self.d1)
+        self.dlgn1_1e = self.frf(sfs, self.params['fts1_1'][0], self.params['t1'][0], self.params['ats1'][0], self.params['a1'][0], self.params['d1'][0])
+        self.dlgn1_2e = self.frf(sfs, self.params['fts1_2'][0], self.params['t1'][0], self.params['ats1'][0], self.params['a1'][0], self.params['d1'][0])
+        self.dlgn1_3e = self.frf(sfs, self.params['fts1_3'][0], self.params['t1'][0], self.params['ats1'][0], self.params['a1'][0], self.params['d1'][0])
 
         # V1 Neuron 2 - inhibitory dLGN inputs
-        self.dlgn1_1i = self.frf(sfs, self.fts1_1, self.t1 + self.inh_d1, self.ats1, self.a1, self.d1)
-        self.dlgn1_2i = self.frf(sfs, self.fts1_2, self.t1 + self.inh_d1, self.ats1, self.a1, self.d1)
-        self.dlgn1_3i = self.frf(sfs, self.fts1_3, self.t1 + self.inh_d1, self.ats1, self.a1, self.d1)
+        self.dlgn1_1i = self.frf(sfs, self.params['fts1_1'][0], self.params['t1'][0] + self.params['inh_d1'][0], self.params['ats1'][0], self.params['a1'][0], self.params['d1'][0])
+        self.dlgn1_2i = self.frf(sfs, self.params['fts1_2'][0], self.params['t1'][0] + self.params['inh_d1'][0], self.params['ats1'][0], self.params['a1'][0], self.params['d1'][0])
+        self.dlgn1_3i = self.frf(sfs, self.params['fts1_3'][0], self.params['t1'][0] + self.params['inh_d1'][0], self.params['ats1'][0], self.params['a1'][0], self.params['d1'][0])
+
 
         # V1 Neuron 1 - excitatory and inhibitory components
         self.v1_0e = self.dlgn0_1e + self.dlgn0_2e + self.dlgn0_3e
@@ -211,51 +238,50 @@ class SGCCircuit(tf.Module):
         self.v1_1i = self.dlgn1_1i + self.dlgn1_2i + self.dlgn1_3i
 
         # V1 Neuron 1 - full responses
-        self.v1_0 = self.v1_0e - (self.inh_w0 * self.v1_0i)
+        self.v1_0 = self.v1_0e - (self.params['inh_w0'][0] * self.v1_0i)
 
         # V1 Neuron 2 - full responses
-        self.v1_1 = self.v1_1e - (self.inh_w1 * self.v1_1i)
+        self.v1_1 = self.v1_1e - (self.params['inh_w1'][0] * self.v1_1i)
 
         Y = tf.stack([
             self.v1_0,
             self.v1_1,
         ], axis = 1)
 
-        if tracking:
-            self.update_variables()
-
         return Y
     
-    def update_variables(self):
-        # For internal tracking
+    def update_transform(self):
+
+        # Transform the normalized variables back into their meaningful scale
         self.params = {
-            "t0": self.t0,
-            "t1": self.t1,
+            "t0": (self.variable_transformer(self.t0, self.t0_lower, self.t0_upper), 'V1_0 input Latency:0'),
+            "t1": (self.variable_transformer(self.t1, self.t1_lower, self.t1_upper), 'V1_1 input Latency:0'),
 
-            "inh_d0": self.inh_d0,
-            "inh_d1": self.inh_d1,
+            "inh_d0": (self.variable_transformer(self.inh_d0, self.inh_d0_lower, self.inh_d0_upper), 'V1_0 inhibition delay:0'),
+            "inh_d1": (self.variable_transformer(self.inh_d1, self.inh_d1_lower, self.inh_d1_upper), 'V1_1 inhibition delay:0'),
 
-            "fts0_1": self.fts0_1,
-            "fts0_2": self.fts0_2,
-            "fts0_3": self.fts0_3,
+            "fts0_1": (self.variable_transformer(self.fts0_1, self.fts0_1_lower, self.fts0_1_upper), 'dLGN1 into V1_0 - frequency-time slope:0'),
+            "fts0_2": (self.variable_transformer(self.fts0_2, self.fts0_2_lower, self.fts0_2_upper), 'dLGN2 into V1_0 - frequency-time slope:0'),
+            "fts0_3": (self.variable_transformer(self.fts0_3, self.fts0_3_lower, self.fts0_3_upper), 'dLGN3 into V1_0 - frequency-time slope:0'),
 
-            "fts1_1": self.fts1_1,
-            "fts1_2": self.fts1_2,
-            "fts1_3": self.fts1_3,
+            "fts1_1": (self.variable_transformer(self.fts1_1, self.fts1_1_lower, self.fts1_1_upper), 'dLGN1 into V1_1 - frequency-time slope:0'),
+            "fts1_2": (self.variable_transformer(self.fts1_2, self.fts1_2_lower, self.fts1_2_upper), 'dLGN2 into V1_1 - frequency-time slope:0'),
+            "fts1_3": (self.variable_transformer(self.fts1_3, self.fts1_3_lower, self.fts1_3_upper), 'dLGN3 into V1_1 - frequency-time slope:0'),
 
-            "a0": self.a0,
-            "a1": self.a1,
+            "a0": (self.variable_transformer(self.a0, self.a0_lower, self.a0_upper), 'V1_0 input amplitude:0'),
+            "a1": (self.variable_transformer(self.a1, self.a1_lower, self.a1_upper), 'V1_1 input amplitude:0'),
 
-            "ats0": self.ats0,
-            "ats1": self.ats1,
+            "ats0": (self.variable_transformer(self.ats0, self.ats0_lower, self.ats0_upper), 'V1_0 input amplitude-time slope:0'),
+            "ats1": (self.variable_transformer(self.ats1, self.ats1_lower, self.ats1_upper), 'V1_1 input amplitude-time slope:0'),
 
-            "d0": self.d0,
-            "d1": self.d1,
+            "d0": (self.variable_transformer(self.d0, self.d0_lower, self.d0_upper), 'V1_0 input duration:0'),
+            "d1": (self.variable_transformer(self.d1, self.d1_lower, self.d1_upper), 'V1_1 input duration:0'),
 
-            "inh_w0": self.inh_w0,
-            "inh_w1": self.inh_w1,
+            "inh_w0": (self.variable_transformer(self.inh_w0, self.inh_w0_lower, self.inh_w0_upper), 'V1_0 inhibition weight:0'),
+            "inh_w1": (self.variable_transformer(self.inh_w1, self.inh_w1_lower, self.inh_w1_upper), 'V1_1 inhibition weight:0'),
         }
-    
+
+
 class Optimize:
     def __init__(self, model, epochs = 50):
         self.model = model
@@ -269,7 +295,7 @@ class Optimize:
 
         with tf.GradientTape() as tape:
 
-            Y_pred = model.predict(X, tracking = True)
+            Y_pred = model.predict(X)
             loss = self.mse(Y_pred, Y_true)
 
         self.gradients = tape.gradient(loss, model.trainable_variables)
@@ -278,13 +304,10 @@ class Optimize:
         return loss
 
     def fit(self, X, Y_true):
-        self.loss_decay = []
-        self.param_history = []
-        self.gradient_history = []
 
         optimizer = tf.keras.optimizers.Adam(1e-3)
 
-        defined_params = [x.name for x in list(self.model.params.values())]
+        defined_params = [x[1] for x in list(self.model.params.values())]
         native_params = [x.name for x in self.model.trainable_variables]
         native_to_defined = np.array([native_params.index(x) for x in defined_params])
 
@@ -293,10 +316,17 @@ class Optimize:
             for key in list(self.model.params.keys())
         }
 
-        self.gradient_history_history = {
+        self.scaled_param_history = {
             key: np.zeros([self.model.n_sample, self.epochs])
             for key in list(self.model.params.keys())
         }
+
+        self.gradient_history = {
+            key: np.zeros([self.model.n_sample, self.epochs])
+            for key in list(self.model.params.keys())
+        }
+
+        self.loss_decay = []
 
         for i in range(self.epochs):
 
@@ -313,10 +343,8 @@ class Optimize:
 
             for key, value in self.model.params.items():
                 idx = native_to_defined[list(self.model.params.keys()).index(key)]
-                self.param_history[key][:,i] = tf.identity(value)[:,-1,-1]
-                self.gradient_history_history[key][:,i] = tf.identity(self.gradients)[idx][:,-1,-1]
-
-            # self.param_history.append({key:tf.identity(value) for key, value in self.model.params.items()})
-            # self.gradient_history.append(np.array(self.gradients)[native_to_defined])
+                self.param_history[key][:,i] = tf.identity(value[0])[:,-1,-1]
+                self.scaled_param_history[key][:,i] = tf.identity(self.model.trainable_variables)[idx][:,-1,-1]
+                self.gradient_history[key][:,i] = tf.identity(self.gradients)[idx][:,-1,-1]
 
         return tf.convert_to_tensor(self.loss_decay)
