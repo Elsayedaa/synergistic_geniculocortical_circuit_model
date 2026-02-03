@@ -15,6 +15,7 @@ class SGCCircuit(tf.Module):
 
         ## Set the bounds on the trainable parameters
         self.bounds = bounds
+        self.GBOUNDS = (-6,6)
 
     def variable_transformer(self, x, lower, upper, op = 'scale'):
         if op == 'scale':
@@ -39,9 +40,20 @@ class SGCCircuit(tf.Module):
         dlgn_scaled = tf.random.normal([self.n_sample, n_v1, n_lgn, 5, 1, 1], mean = 0, stddev = 1)
         v1_scaled = tf.random.normal([self.n_sample, n_v1, 1, 2, 1, 1])
 
-        self.dlgn_scaled = tf.Variable(dlgn_scaled, name = 'dLGN_params', trainable = True, dtype = DTYPE)
-        self.v1_scaled = tf.Variable(v1_scaled, name = 'V1_params', trainable = True, dtype = DTYPE)
-
+        self.dlgn_scaled = tf.Variable(dlgn_scaled, 
+                                       name = 'dLGN_params', 
+                                       trainable = True, 
+                                       dtype = DTYPE,
+                                       constraint = lambda x: tf.clip_by_value(x, self.GBOUNDS[0], self.GBOUNDS[1])
+                                       )
+        
+        self.v1_scaled = tf.Variable(v1_scaled, 
+                                     name = 'V1_params', 
+                                     trainable = True, 
+                                     dtype = DTYPE,
+                                     constraint = lambda x: tf.clip_by_value(x, self.GBOUNDS[0], self.GBOUNDS[1])
+                                     )
+        
         self.update_transform()
 
     def load_saved_parameters(self, parameters):
@@ -55,6 +67,47 @@ class SGCCircuit(tf.Module):
         self.v1_scaled = tf.Variable(parameters['V1_params'], name = 'V1_params', trainable = True, dtype = DTYPE)
 
         self.update_transform()
+
+    def set_parameter(
+            self,
+            brain_area = str,
+            samples = list,
+            dlgn_units = list,
+            v1_units = list,
+            param = str,
+            value = int
+    ):
+        
+        control_map = {
+            'dLGN': {'fts': 0, 't': 1, 'ats': 2, 'a': 3, 'd': 4},
+            'V1': {'inh_d': 0, 'inh_w': 1}
+        }
+
+        if brain_area == 'dLGN':
+            bounds = [x for x in self.bounds.values()][:5]
+            lower, upper = bounds[control_map['dLGN'][param]]
+            for v1_unit in v1_units:
+                for dlgn_unit in dlgn_units:
+                    for sample in samples:
+                        self.dlgn_scaled = tf.tensor_scatter_nd_update(
+                            self.dlgn_scaled, 
+                            [[sample,v1_unit,dlgn_unit,control_map['dLGN'][param],0,0]], 
+                            [self.variable_transformer(value, lower, upper, op = 'normalize')]
+                        )
+
+        if brain_area == 'V1':
+            bounds = [x for x in self.bounds.values()][-2:]
+            lower, upper = bounds[control_map['V1'][param]]
+
+            for v1_unit in v1_units:
+                for sample in samples:
+                    self.v1_scaled = tf.tensor_scatter_nd_update(
+                        self.v1_scaled, 
+
+                        # the first 0 is the dLGN unit placeholder
+                        [[sample,v1_unit,0,control_map['V1'][param],0,0]], 
+                        [self.variable_transformer(value, lower, upper, op = 'normalize')]
+                    )
 
     def gaussian(
         self,
@@ -144,9 +197,10 @@ class SGCCircuit(tf.Module):
         }
 
 class Optimize:
-    def __init__(self, model, epochs = 50):
+    def __init__(self, model, epochs = 50, loss_threshold = 0.105):
         self.model = model
         self.epochs = epochs
+        self.loss_threshold = loss_threshold
 
         if hasattr(tf.keras.optimizers, "AdamW"):
             self.optimizer = tf.keras.optimizers.AdamW()
@@ -159,16 +213,37 @@ class Optimize:
         ## The dimension of Y_true has to be expanded to broadcast across multiple samples
         return tf.reduce_mean((Y_pred - Y_true[None, :, :, :,])**2, axis = [1,2,3])
 
-    def train_step(self, model, opt, X, Y_true):
-
+    def train_step(self, opt, X, Y_true):
+        
         with tf.GradientTape() as tape:
-
-            Y_pred = model.predict(X)
+            Y_pred = self.model.predict(X)
             loss = self.mse(Y_pred, Y_true)
 
-        self.gradients = tape.gradient(loss, model.trainable_variables)
-        opt.apply_gradients(zip(self.gradients, model.trainable_variables))
+        # First, find the exploration samples that have converged
+        # 1 for all exploration samples that HAVE converged.
+        self.converged = tf.cast(loss<=self.loss_threshold, dtype = DTYPE)
 
+        # The gradients variable is a tuple containing the gradients for each trainable
+        # variable in the model. In this specific model, there are two trainable variables:
+        # 1) The matrix of dLGN parameters and 2) The matrix of V1 parameters. We want to
+        # mask each variable separately:
+        self.gradients = tape.gradient(loss, self.model.trainable_variables)
+
+        masked_gradients = []
+        for g in self.gradients: # iterate through each trainable variable
+
+            # Expand mask to match parameter rank
+            gmask = tf.reshape(
+                tf.abs(self.converged-1), # 1 for all exploration samples that STILL HAVEN'T converged.
+                [self.model.n_sample] # In this model, exploration samples are in the 0th dimension.
+                + [1] * (len(g.shape) - 1) # Fill with ones to match the rank of the given trainable variable.
+            )
+
+            # Apply the mask to the gradients of the given trainable variable.
+            # For exploration samples with a loss under the threshold, the gradients
+            # will now be set to 0. 
+            masked_gradients.append(g * gmask)
+        opt.apply_gradients(zip(masked_gradients, self.model.trainable_variables))   
         return loss
 
     def fit(self, X, Y_true, output_dtype = np.float16):
@@ -195,7 +270,7 @@ class Optimize:
 
         for i in range(self.epochs):
 
-            loss = self.train_step(self.model, self.optimizer, X, Y_true)
+            loss = self.train_step(self.optimizer, X, Y_true)
 
             minloss = loss.numpy().min()
             medloss = np.median(loss.numpy())
@@ -217,6 +292,8 @@ class Optimize:
     def save_state(self, file_identifier, dtype = np.float16, write = True):
 
         self.outputs = {
+            'converged_samples': self.converged.numpy().astype(dtype),
+
             'param_history': {
                     x[0]: x[1].astype(dtype)
                     for x in self.param_history.items()
