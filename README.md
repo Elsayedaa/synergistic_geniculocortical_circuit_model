@@ -1,0 +1,1 @@
+# synergistic_geniculocortical_circuit_model
