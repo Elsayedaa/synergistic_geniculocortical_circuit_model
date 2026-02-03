@@ -1,4 +1,7 @@
+## Multistart optimization enabled
+
 import tensorflow as tf
+import numpy as np
 
 DTYPE = tf.float32
 class SGCCircuit(tf.Module):
@@ -11,14 +14,18 @@ class SGCCircuit(tf.Module):
             a0, a1, ats0, ats1,
             d0, d1, 
             inh_w0, inh_w1,
-            mode = 'loaded'
+            mode = 'loaded',
+            n_sample = 1,
     ):
         super().__init__(name = 'SGCC')
 
         ## Fixed parameters
-        self.T = tf.cast(tf.linspace(0,250,250), dtype = DTYPE)
-        self.mid = tf.constant(0, dtype = DTYPE)
 
+        # reshape to broadcast across multiple exploration samples
+        self.n_sample = n_sample
+        self.T = tf.reshape(tf.cast(tf.linspace(0,250,250), dtype = DTYPE), [1,1,-1])
+        self.mid = tf.cast(tf.fill([self.n_sample, 1, 1], 0), dtype = DTYPE)
+        
         ## Trainable parameters
 
         #### Initial response latencies ####
@@ -121,13 +128,15 @@ class SGCCircuit(tf.Module):
         self.inh_w1 = tf.Variable(self.variable_initializer(inh_w1, mode), 
                               dtype = DTYPE, trainable = True, constraint = tf.nn.relu,
                               name = 'V1_1 inhibition weight') # inhibition weight applied to V1 #2
-        
+        self.update_variables()
+
     def variable_initializer(self, x, mode):
         if mode == 'random':
-            return tf.Variable(tf.random.uniform([1], minval = x[0], maxval = x[1]))
+            ## Broadcast 
+            return tf.Variable(tf.random.uniform([self.n_sample, 1], minval = x[0], maxval = x[1]))[:, None, :]
         
         if mode == 'loaded':
-            return x
+            return tf.cast(tf.fill([1,1,1], x), dtype = DTYPE)
 
     def gaussian(
         self,
@@ -155,23 +164,24 @@ class SGCCircuit(tf.Module):
         ats, a,
         d
     ):
-
-        f = tf.stack([
-            self.gaussian(
-                self.T, 
-                self.f_t(fts, t, sf),  self.f_amp(ats, a, sf), 
-                self.mid, d
-            )
-            for sf in sfs
-        ], axis = 0)
+        # Make the rest of the variables broadcastable
+        f = self.gaussian(
+            self.T,
+            self.f_t(fts, t, sfs),
+            self.f_amp(ats, a, sfs),
+            self.mid, d
+        )
 
         return f
-
 
     def predict(
             self,
             sfs,
+            tracking = False
     ):
+        # reshape the SF input to broadcast across multiple exploration samples
+        sfs = tf.reshape(sfs, [1,-1,1])
+
         # V1 Neuron 1 - excitatory dLGN inputs
         self.dlgn0_1e = self.frf(sfs, self.fts0_1, self.t0, self.ats0, self.a0, self.d0)
         self.dlgn0_2e = self.frf(sfs, self.fts0_2, self.t0, self.ats0, self.a0, self.d0)
@@ -209,36 +219,104 @@ class SGCCircuit(tf.Module):
         Y = tf.stack([
             self.v1_0,
             self.v1_1,
-        ])
+        ], axis = 1)
+
+        if tracking:
+            self.update_variables()
 
         return Y
     
-def mse(Y_pred, Y_true):
-    return tf.reduce_mean(
-        (tf.reshape(Y_true, -1) - tf.reshape(Y_pred, -1))**2
-    )
+    def update_variables(self):
+        # For internal tracking
+        self.params = {
+            "t0": self.t0,
+            "t1": self.t1,
 
-def train_step(model, X, Y_true):
+            "inh_d0": self.inh_d0,
+            "inh_d1": self.inh_d1,
 
-    optimizer = tf.keras.optimizers.Adam(1e-3)
-    with tf.GradientTape() as tape:
+            "fts0_1": self.fts0_1,
+            "fts0_2": self.fts0_2,
+            "fts0_3": self.fts0_3,
 
-        Y_pred = model.predict(X)
-        loss = mse(Y_pred, Y_true)
+            "fts1_1": self.fts1_1,
+            "fts1_2": self.fts1_2,
+            "fts1_3": self.fts1_3,
 
-    gradients = tape.gradient(loss, model.trainable_variables)
-    optimizer.apply_gradients(zip(gradients, model.trainable_variables))
+            "a0": self.a0,
+            "a1": self.a1,
 
-    return loss
+            "ats0": self.ats0,
+            "ats1": self.ats1,
 
-def fit(model, X, Y_true, epochs = 50):
-    loss_decay = []
-    for i in range(epochs):
-        loss = train_step(model, X, Y_true)
+            "d0": self.d0,
+            "d1": self.d1,
 
-        if i%100 == 0:
-            print(f"Training step = {i}, loss = {loss}")
-        loss_decay.append(loss)
+            "inh_w0": self.inh_w0,
+            "inh_w1": self.inh_w1,
+        }
+    
+class Optimize:
+    def __init__(self, model, epochs = 50):
+        self.model = model
+        self.epochs = epochs
+    
+    def mse(self, Y_pred, Y_true):
+        ## The dimension of Y_true has to be expanded to broadcast across multiple samples
+        return tf.reduce_mean((Y_pred - Y_true[None, :, :, :])**2, axis = [1,2,3])
 
-        
-    return loss_decay
+    def train_step(self, model, opt, X, Y_true):
+
+        with tf.GradientTape() as tape:
+
+            Y_pred = model.predict(X, tracking = True)
+            loss = self.mse(Y_pred, Y_true)
+
+        self.gradients = tape.gradient(loss, model.trainable_variables)
+        opt.apply_gradients(zip(self.gradients, model.trainable_variables))
+
+        return loss
+
+    def fit(self, X, Y_true):
+        self.loss_decay = []
+        self.param_history = []
+        self.gradient_history = []
+
+        optimizer = tf.keras.optimizers.Adam(1e-3)
+
+        defined_params = [x.name for x in list(self.model.params.values())]
+        native_params = [x.name for x in self.model.trainable_variables]
+        native_to_defined = np.array([native_params.index(x) for x in defined_params])
+
+        self.param_history = {
+            key: np.zeros([self.model.n_sample, self.epochs])
+            for key in list(self.model.params.keys())
+        }
+
+        self.gradient_history_history = {
+            key: np.zeros([self.model.n_sample, self.epochs])
+            for key in list(self.model.params.keys())
+        }
+
+        for i in range(self.epochs):
+
+            loss = self.train_step(self.model, optimizer, X, Y_true)
+
+            minloss = loss.numpy().min()
+            medloss = np.median(loss.numpy())
+            maxloss = loss.numpy().max()
+
+            if i%100 == 0:
+                print(f"Training step = {i}, N_exploration_samples = {len(loss)},\nmin_loss = {minloss}\nmed_loss = {medloss}\nmax_loss = {maxloss}\n")
+
+            self.loss_decay.append(loss)
+
+            for key, value in self.model.params.items():
+                idx = native_to_defined[list(self.model.params.keys()).index(key)]
+                self.param_history[key][:,i] = tf.identity(value)[:,-1,-1]
+                self.gradient_history_history[key][:,i] = tf.identity(self.gradients)[idx][:,-1,-1]
+
+            # self.param_history.append({key:tf.identity(value) for key, value in self.model.params.items()})
+            # self.gradient_history.append(np.array(self.gradients)[native_to_defined])
+
+        return tf.convert_to_tensor(self.loss_decay)
