@@ -2,30 +2,53 @@
 
 import tensorflow as tf
 import numpy as np
+import pickle
 
 DTYPE = tf.float32
 class SGCCircuit(tf.Module):
 
     def __init__(
             self,
-            t0, t1, inh_d0, inh_d1,
-            fts0_1, fts0_2, fts0_3,
-            fts1_1, fts1_2, fts1_3,
-            a0, a1, ats0, ats1,
-            d0, d1, 
-            inh_w0, inh_w1,
-            n_sample = 1,
+            bounds,
     ):
         super().__init__(name = 'SGCC')
 
-        ## Fixed parameters
-
-        # reshape to broadcast across multiple exploration samples
-        self.n_sample = n_sample
-        self.T = tf.reshape(tf.cast(tf.linspace(0,250,250), dtype = DTYPE), [1,1,-1])
-        self.mid = tf.cast(tf.fill([self.n_sample, 1, 1], 0), dtype = DTYPE)
+        ## Set the bounds on the trainable parameters
+        self.bounds = bounds
         
-        ## Trainable parameters
+        self.t0_lower, self.t0_upper = bounds['t0']
+        self.t1_lower, self.t1_upper = bounds['t1']
+
+        self.inh_d0_lower, self.inh_d0_upper = bounds['inh_d0']
+        self.inh_d1_lower, self.inh_d1_upper = bounds['inh_d1']
+
+        self.fts0_1_lower, self.fts0_1_upper = bounds['fts0_1']
+        self.fts0_2_lower, self.fts0_2_upper = bounds['fts0_2']
+        self.fts0_3_lower, self.fts0_3_upper = bounds['fts0_3']
+
+        self.fts1_1_lower, self.fts1_1_upper = bounds['fts1_1']
+        self.fts1_2_lower, self.fts1_2_upper = bounds['fts1_2']
+        self.fts1_3_lower, self.fts1_3_upper = bounds['fts1_3']
+
+        self.a0_lower, self.a0_upper = bounds['a0']
+        self.a1_lower, self.a1_upper = bounds['a1']
+
+        self.ats0_lower, self.ats0_upper = bounds['ats0']
+        self.ats1_lower, self.ats1_upper = bounds['ats1']
+
+        self.d0_lower, self.d0_upper = bounds['d0']
+        self.d1_lower, self.d1_upper = bounds['d1']
+
+        self.inh_w0_lower, self.inh_w0_upper = bounds['inh_w0']
+        self.inh_w1_lower, self.inh_w1_upper = bounds['inh_w1']
+
+
+    def set_parameters(self, initialization):
+
+        if initialization == 'random':
+            parameters = self.random_initializer()
+        if initialization == 'saved':
+            parameters = self.loaded_parameters
 
         #### Initial response latencies ####
         """
@@ -33,121 +56,102 @@ class SGCCircuit(tf.Module):
         into a particular V1 unit and must be the same for the corresponding
         inhibitory inputs. 
         """
-        self.t0_lower, self.t0_upper = t0
         self.t0 = tf.Variable(
-            self.variable_initializer(), dtype=DTYPE, trainable=True,
+            parameters['t0'], dtype=DTYPE, trainable=True,
             name='V1_0 input Latency'
         )
-
-        self.t1_lower, self.t1_upper = t1
         self.t1 = tf.Variable(
-            self.variable_initializer(), dtype=DTYPE, trainable=True,
+            parameters['t1'], dtype=DTYPE, trainable=True,
             name='V1_1 input Latency'
         )
         #################################################################
 
         #### Inhibition delay ####
-        self.inh_d0_lower, self.inh_d0_upper = inh_d0
         self.inh_d0 = tf.Variable(
-            self.variable_initializer(), dtype=DTYPE, trainable=True,
+            parameters['inh_d0'], dtype=DTYPE, trainable=True,
             name='V1_0 inhibition delay'
         )
 
-        self.inh_d1_lower, self.inh_d1_upper = inh_d1
         self.inh_d1 = tf.Variable(
-            self.variable_initializer(), dtype=DTYPE, trainable=True,
+            parameters['inh_d1'], dtype=DTYPE, trainable=True,
             name='V1_1 inhibition delay'
         )
         #################################################################
 
         #### Frequency-time slopes ####
-        self.fts0_1_lower, self.fts0_1_upper = fts0_1
         self.fts0_1 = tf.Variable(
-            self.variable_initializer(), dtype=DTYPE, trainable=True,
+            parameters['fts0_1'], dtype=DTYPE, trainable=True,
             name='dLGN1 into V1_0 - frequency-time slope'
         )
 
-        self.fts0_2_lower, self.fts0_2_upper = fts0_2
         self.fts0_2 = tf.Variable(
-            self.variable_initializer(), dtype=DTYPE, trainable=True,
+            parameters['fts0_2'], dtype=DTYPE, trainable=True,
             name='dLGN2 into V1_0 - frequency-time slope'
         )
 
-        self.fts0_3_lower, self.fts0_3_upper = fts0_3
         self.fts0_3 = tf.Variable(
-            self.variable_initializer(), dtype=DTYPE, trainable=True,
+            parameters['fts0_3'], dtype=DTYPE, trainable=True,
             name='dLGN3 into V1_0 - frequency-time slope'
         )
 
-        self.fts1_1_lower, self.fts1_1_upper = fts1_1
         self.fts1_1 = tf.Variable(
-            self.variable_initializer(), dtype=DTYPE, trainable=True,
+            parameters['fts1_1'], dtype=DTYPE, trainable=True,
             name='dLGN1 into V1_1 - frequency-time slope'
         )
 
-        self.fts1_2_lower, self.fts1_2_upper = fts1_2
         self.fts1_2 = tf.Variable(
-            self.variable_initializer(), dtype=DTYPE, trainable=True,
+            parameters['fts1_2'], dtype=DTYPE, trainable=True,
             name='dLGN2 into V1_1 - frequency-time slope'
         )
 
-        self.fts1_3_lower, self.fts1_3_upper = fts1_3
         self.fts1_3 = tf.Variable(
-            self.variable_initializer(), dtype=DTYPE, trainable=True,
+            parameters['fts1_3'], dtype=DTYPE, trainable=True,
             name='dLGN3 into V1_1 - frequency-time slope'
         )
         #################################################################
 
         #### Initial response amplitude ####
-        self.a0_lower, self.a0_upper = a0
         self.a0 = tf.Variable(
-            self.variable_initializer(), dtype=DTYPE, trainable=True,
+            parameters['a0'], dtype=DTYPE, trainable=True,
             name='V1_0 input amplitude'
         )
 
-        self.a1_lower, self.a1_upper = a1
         self.a1 = tf.Variable(
-            self.variable_initializer(), dtype=DTYPE, trainable=True,
+            parameters['a1'], dtype=DTYPE, trainable=True,
             name='V1_1 input amplitude'
         )
         #################################################################
 
         #### Amplitude-time slopes ####
-        self.ats0_lower, self.ats0_upper = ats0
         self.ats0 = tf.Variable(
-            self.variable_initializer(), dtype=DTYPE, trainable=True,
+            parameters['ats0'], dtype=DTYPE, trainable=True,
             name='V1_0 input amplitude-time slope'
         )
 
-        self.ats1_lower, self.ats1_upper = ats1
         self.ats1 = tf.Variable(
-            self.variable_initializer(), dtype=DTYPE, trainable=True,
+            parameters['ats1'], dtype=DTYPE, trainable=True,
             name='V1_1 input amplitude-time slope'
         )
 
         #### Initial response duration ####
-        self.d0_lower, self.d0_upper = d0
         self.d0 = tf.Variable(
-            self.variable_initializer(), dtype=DTYPE, trainable=True,
+            parameters['d0'], dtype=DTYPE, trainable=True,
             name='V1_0 input duration'
         )
 
-        self.d1_lower, self.d1_upper = d1
         self.d1 = tf.Variable(
-            self.variable_initializer(), dtype=DTYPE, trainable=True,
+            parameters['d1'], dtype=DTYPE, trainable=True,
             name='V1_1 input duration'
         )
 
         #### Inhibition weight ####
-        self.inh_w0_lower, self.inh_w0_upper = inh_w0
         self.inh_w0 = tf.Variable(
-            self.variable_initializer(), dtype=DTYPE, trainable=True,
+            parameters['inh_w0'], dtype=DTYPE, trainable=True,
             name='V1_0 inhibition weight'
         )
 
-        self.inh_w1_lower, self.inh_w1_upper = inh_w1
         self.inh_w1 = tf.Variable(
-            self.variable_initializer(), dtype=DTYPE, trainable=True,
+            parameters['inh_w1'], dtype=DTYPE, trainable=True,
             name='V1_1 inhibition weight'
         )
 
@@ -158,9 +162,32 @@ class SGCCircuit(tf.Module):
         transformed = lower + (upper - lower) * tf.sigmoid(x)
         return transformed
 
-    def variable_initializer(self):
-        scaled = tf.random.normal([self.n_sample, 1, 1], mean = 0, stddev = 1)
-        return scaled
+    def random_initializer(self):
+        initial_variables = {}
+
+        for key in self.bounds.keys():
+            scaled = tf.random.normal([self.n_sample, 1, 1], mean = 0, stddev = 1)
+            initial_variables[key] = scaled
+        return initial_variables
+    
+    def initialize_random_parameters(self, n_sample):
+        self.n_sample = n_sample
+
+        ## Fixed parameters
+        self.T = tf.reshape(tf.cast(tf.linspace(0,250,250), dtype = DTYPE), [1,1,-1])
+        self.mid = tf.cast(tf.fill([self.n_sample, 1, 1], 0), dtype = DTYPE)
+
+        self.set_parameters(initialization = 'random')
+
+    def load_saved_parameters(self, parameters):
+        self.n_sample = len(parameters['t0'])
+
+        ## Fixed parameters
+        self.T = tf.reshape(tf.cast(tf.linspace(0,250,250), dtype = DTYPE), [1,1,-1])
+        self.mid = tf.cast(tf.fill([self.n_sample, 1, 1], 0), dtype = DTYPE)
+
+        self.loaded_parameters = parameters
+        self.set_parameters(initialization='saved')
 
     def gaussian(
         self,
@@ -348,3 +375,19 @@ class Optimize:
                 self.gradient_history[key][:,i] = tf.identity(self.gradients)[idx][:,-1,-1]
 
         return tf.convert_to_tensor(self.loss_decay)
+    
+    def save_state(self, file_identifier):
+
+        self.outputs = {
+            'param_history': self.param_history,
+            'scaled_param_history': self.scaled_param_history,
+            'gradient_history': self.gradient_history,
+            'loss_decay': self.loss_decay,
+            'final_epoch_params': {
+                x[0]:tf.convert_to_tensor(x[1][:,-1][:,None, None], dtype=DTYPE) 
+                for x in self.scaled_param_history.items()
+            }
+        }
+        
+        with open(f"{file_identifier}.pkl", 'wb') as f:
+            pickle.dump(self.outputs, f)
