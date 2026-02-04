@@ -11,3 +11,19 @@ The purpose of this project is to create a simple computational model of the gen
 ![1](images/model_arch_1.png)
 ![2](images/model_arch_2.png)
 ![3](images/model_arch_3.png)
+
+### Model Parameters:
+
+Model parameters are split into dLGN parameters and V1 parameters.
+
+dLGN parameters:
+
+    "fts": Frequency-time slope - controls how coarse-to-fine a dLGN unit response is.
+    "t": Time intercept parameter - onset time of the lowest SF response.
+    "fas": Frequency-amplitude slope - controls the decay of response amplitude with SF.
+    "a": Amplitude intercept parameter - initial amplitude of the lowest SF response.
+    "d": Response duration - duration of the dLGN uni response.
+
+Schematic showing what each dLGN parameter controls:
+
+![4](images/sgcc_single_dlgn_out.png)
