@@ -36,3 +36,5 @@ V1 Parameters:
 Schematic showing what each V1 parameter controls. For ease of visualization, only a single SF response is shown:
 
 ![5](images/sgcc_v1_comp_out.png)
+
+![6](images/sgcc_v1_term_out.png)
