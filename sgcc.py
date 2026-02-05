@@ -79,7 +79,7 @@ class SGCCircuit(tf.Module):
     ):
         
         control_map = {
-            'dLGN': {'fts': 0, 't': 1, 'ats': 2, 'a': 3, 'd': 4},
+            'dLGN': {'fts': 0, 't': 1, 'fas': 2, 'a': 3, 'd': 4},
             'V1': {'inh_d': 0, 'inh_w': 1}
         }
 
@@ -122,8 +122,8 @@ class SGCCircuit(tf.Module):
 
         return mid+(amp*f)
 
-    def f_amp(self, ats, a, sf):
-        return tf.nn.relu(ats*sf+a)
+    def f_amp(self, fas, a, sf):
+        return tf.nn.relu(fas*sf+a)
 
     def f_t(self, fts, t, sf):
         return fts*sf+t
@@ -132,14 +132,14 @@ class SGCCircuit(tf.Module):
         self,
         sfs, 
         fts, t,
-        ats, a,
+        fas, a,
         d
     ):
         # Make the rest of the variables broadcastable
         f = self.gaussian(
             self.T,
             self.f_t(fts, t, sfs),
-            self.f_amp(ats, a, sfs),
+            self.f_amp(fas, a, sfs),
             self.mid, d
         )
 
@@ -286,7 +286,8 @@ class Optimize:
                 self.param_history[key][:,i,:,:,:] = tf.identity(value).numpy().astype(output_dtype)
                 self.scaled_param_history[key][:,i,:,:,:] = tf.identity(self.model.trainable_variables[idx]).numpy().astype(output_dtype)
                 self.gradient_history[key][:,i,:,:,:] = tf.identity(self.gradients[idx]).numpy().astype(output_dtype)
-
+                
+        self.save_state("_", write=False)
         return tf.convert_to_tensor(self.loss_decay)
     
     def save_state(self, file_identifier, dtype = np.float16, write = True):
