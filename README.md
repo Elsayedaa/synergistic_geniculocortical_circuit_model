@@ -27,3 +27,12 @@ dLGN parameters:
 Schematic showing what each dLGN parameter controls:
 
 ![4](images/sgcc_single_dlgn_out.png)
+
+V1 Parameters:
+
+    "inh_d": Inhibition delay - temporal delay between the excitatory and inhibitory V1 components.
+    "inh_w": Inhibition weight - gain parameter for the inhibitory V1 component.
+
+Schematic showing what each V1 parameter controls. For ease of visualization, only a single SF response is shown:
+
+![5](images/sgcc_v1_comp_out.png)
