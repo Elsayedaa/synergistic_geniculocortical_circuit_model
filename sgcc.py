@@ -15,7 +15,7 @@ class SGCCircuit(tf.Module):
 
         ## Set the bounds on the trainable parameters
         self.bounds = bounds
-        self.GBOUNDS = (-6,6)
+        self.GBOUND = 6
 
     def variable_transformer(self, x, lower, upper, op = 'scale'):
         if op == 'scale':
@@ -37,21 +37,19 @@ class SGCCircuit(tf.Module):
         self.mid = tf.cast(tf.fill([self.n_sample, n_v1, n_lgn, 1, 1], 0), dtype = DTYPE)
 
         ## Trainable parameters
-        dlgn_scaled = tf.random.normal([self.n_sample, n_v1, n_lgn, 5, 1, 1], mean = 0, stddev = 1)
+        dlgn_raw = tf.random.normal([self.n_sample, n_v1, n_lgn, 5, 1, 1], mean = 0, stddev = 1)
         v1_scaled = tf.random.normal([self.n_sample, n_v1, 1, 2, 1, 1])
 
-        self.dlgn_scaled = tf.Variable(dlgn_scaled, 
+        self.dlgn_raw = tf.Variable(dlgn_raw, 
                                        name = 'dLGN_params', 
                                        trainable = True, 
                                        dtype = DTYPE,
-                                       constraint = lambda x: tf.clip_by_value(x, self.GBOUNDS[0], self.GBOUNDS[1])
                                        )
         
         self.v1_scaled = tf.Variable(v1_scaled, 
                                      name = 'V1_params', 
                                      trainable = True, 
                                      dtype = DTYPE,
-                                     constraint = lambda x: tf.clip_by_value(x, self.GBOUNDS[0], self.GBOUNDS[1])
                                      )
         
         self.update_transform()
@@ -63,10 +61,35 @@ class SGCCircuit(tf.Module):
         self.T = tf.reshape(tf.cast(tf.linspace(0,250,250), dtype = DTYPE), [1, 1, 1, 1,-1])
         self.mid = tf.cast(tf.fill([self.n_sample, self.n_v1, self.n_lgn, 1, 1], 0), dtype = DTYPE)
 
-        self.dlgn_scaled = tf.Variable(parameters['dLGN_params'], name = 'dLGN_params', trainable = True, dtype = DTYPE)
+        self.dlgn_raw = tf.Variable(parameters['dLGN_params'], name = 'dLGN_params', trainable = True, dtype = DTYPE)
         self.v1_scaled = tf.Variable(parameters['V1_params'], name = 'V1_params', trainable = True, dtype = DTYPE)
 
         self.update_transform()
+
+    @property # apply the necessary reparameterizations
+    def dlgn_scaled(self):
+
+        ## apply identifiability constraint (dLGN0<=dLGN1<=dLGN2)
+        leading_unit = self.dlgn_raw[:, :, 0:1, ...] # leading dLGN unit
+        trailing_offsets = tf.nn.softplus( # values added to consecutive dLGN units (enforce positive vals)
+            self.dlgn_raw[:, :, 1:, ...]
+        ) 
+
+        # get the values of the trailing units by adding the offsets to the leading unit
+        trailing_units = leading_unit + tf.cumsum(trailing_offsets, axis=2)
+        ordered_units = tf.concat([leading_unit, trailing_units], axis=2)
+
+        return ordered_units
+    
+    def inverse_dlgn_property(self, ordered_units):
+        ## invert the dLGN reparameterization (for loading parameters and reinitialization)
+
+        leading_unit = ordered_units[:,:,0]
+        trailing_offsets = ordered_units[:,:,1:] - ordered_units[:,:,:-1]
+        trailing_offsets = tf.math.log(tf.math.expm1(trailing_offsets)) # apply an approximate inverse softplus
+        dlgn_recov = np.concatenate([leading_unit[:,:,None,:,:,:], trailing_offsets], axis = 2)
+
+        return dlgn_recov
 
     def set_parameter(
             self,
@@ -92,7 +115,7 @@ class SGCCircuit(tf.Module):
                         self.dlgn_scaled = tf.tensor_scatter_nd_update(
                             self.dlgn_scaled, 
                             [[sample,v1_unit,dlgn_unit,control_map['dLGN'][param],0,0]], 
-                            [self.variable_transformer(value, lower, upper, op = 'normalize')]
+                            [self.inverse_dlgn_property(self.variable_transformer(value, lower, upper, op = 'normalize'))]
                         )
 
         if brain_area == 'V1':
@@ -286,7 +309,6 @@ class Optimize:
                 self.param_history[key][:,i,:,:,:] = tf.identity(value).numpy().astype(output_dtype)
                 self.scaled_param_history[key][:,i,:,:,:] = tf.identity(self.model.trainable_variables[idx]).numpy().astype(output_dtype)
                 self.gradient_history[key][:,i,:,:,:] = tf.identity(self.gradients[idx]).numpy().astype(output_dtype)
-                
         self.save_state("_", write=False)
         return tf.convert_to_tensor(self.loss_decay)
     
