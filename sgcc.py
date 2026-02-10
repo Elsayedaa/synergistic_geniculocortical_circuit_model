@@ -112,11 +112,20 @@ class SGCCircuit(tf.Module):
             for v1_unit in v1_units:
                 for dlgn_unit in dlgn_units:
                     for sample in samples:
-                        self.dlgn_scaled = tf.tensor_scatter_nd_update(
+                        
+                        # update the scaled reparameterized variable
+                        new_dlgn_scaled = tf.tensor_scatter_nd_update(
                             self.dlgn_scaled, 
                             [[sample,v1_unit,dlgn_unit,control_map['dLGN'][param],0,0]], 
-                            [self.inverse_dlgn_property(self.variable_transformer(value, lower, upper, op = 'normalize'))]
+                            [self.variable_transformer(value, lower, upper, op = 'normalize')]
                         )
+
+                        # apply the inverse property
+                        self.dlgn_raw = tf.Variable(self.inverse_dlgn_property(new_dlgn_scaled), 
+                                       name = 'dLGN_params', 
+                                       trainable = True, 
+                                       dtype = DTYPE,
+                                       )
 
         if brain_area == 'V1':
             bounds = [x for x in self.bounds.values()][-2:]
