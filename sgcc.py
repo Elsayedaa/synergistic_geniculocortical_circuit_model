@@ -327,19 +327,19 @@ class Optimize:
 
         elems = [(self.model.n_lgn,7), (1,2)]
         self.param_history = {
-            key: np.zeros([self.model.n_sample, self.epochs, self.model.n_v1, elem[0], elem[1], 1, 1])
+            key: np.zeros([self.model.n_sample, self.epochs, self.model.n_v1, elem[0], elem[1], 1, 1], dtype=output_dtype)
             for key, elem in zip(list(self.model.params.keys()), elems)
         }
         self.scaled_param_history = {
-            key: np.zeros([self.model.n_sample, self.epochs, self.model.n_v1, elem[0], elem[1], 1, 1])
+            key: np.zeros([self.model.n_sample, self.epochs, self.model.n_v1, elem[0], elem[1], 1, 1], dtype=output_dtype)
             for key, elem in zip(list(self.model.params.keys()), elems)
         }
         self.gradient_history = {
-            key: np.zeros([self.model.n_sample, self.epochs, self.model.n_v1, elem[0], elem[1], 1, 1])
+            key: np.zeros([self.model.n_sample, self.epochs, self.model.n_v1, elem[0], elem[1], 1, 1], dtype=output_dtype)
             for key, elem in zip(list(self.model.params.keys()), elems)
         }
 
-        self.loss_decay = np.zeros((self.epochs, self.model.n_sample)).astype(output_dtype)
+        self.loss_decay = np.zeros((self.epochs, self.model.n_sample), dtype=output_dtype)
 
         for i in range(self.epochs):
 
