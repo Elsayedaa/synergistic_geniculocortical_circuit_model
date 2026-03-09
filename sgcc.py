@@ -1,5 +1,3 @@
-## Multistart optimization enabled
-
 import tensorflow as tf
 import numpy as np
 import pickle
@@ -37,7 +35,7 @@ class SGCCircuit(tf.Module):
         self.mid = tf.cast(tf.fill([self.n_sample, n_v1, n_lgn, 1, 1], 0), dtype = DTYPE)
 
         ## Trainable parameters
-        dlgn_raw = tf.random.normal([self.n_sample, n_v1, n_lgn, 5, 1, 1], mean = 0, stddev = 1)
+        dlgn_raw = tf.random.normal([self.n_sample, n_v1, n_lgn, 7, 1, 1], mean = 0, stddev = 1)
         v1_scaled = tf.random.normal([self.n_sample, n_v1, 1, 2, 1, 1])
 
         self.dlgn_raw = tf.Variable(dlgn_raw, 
@@ -102,12 +100,12 @@ class SGCCircuit(tf.Module):
     ):
         
         control_map = {
-            'dLGN': {'fts': 0, 't': 1, 'fas': 2, 'a': 3, 'd': 4},
+            'dLGN': {'fts': 0, 't': 1, 'ampc': 2, 'ampm': 3, 'ampg': 4, 'ampw': 5, 'd': 6},
             'V1': {'inh_d': 0, 'inh_w': 1}
         }
 
         if brain_area == 'dLGN':
-            bounds = [x for x in self.bounds.values()][:5]
+            bounds = [x for x in self.bounds.values()][:-2]
             lower, upper = bounds[control_map['dLGN'][param]]
             for v1_unit in v1_units:
                 for dlgn_unit in dlgn_units:
@@ -153,9 +151,26 @@ class SGCCircuit(tf.Module):
         f = tf.math.exp(-1*(((support-ctr)**2)/(2*std**2)))
 
         return mid+(amp*f)
+    
+    def gaussian_gradient( # calculate the derivative of a gaussian
+        self,
+        support,
+        ctr, 
+        amp, 
+        mid, 
+        std 
+    ):
+        fg = self.gaussian(
+            support, ctr, amp, mid, std 
+        )
+        
+        dGdX = -fg * ((support - ctr)/(std**2))
+        return dGdX
 
-    def f_amp(self, fas, a, sf):
-        return tf.nn.relu(fas*sf+a)
+    def f_amp(self, sf, ampc, ampm, ampg, ampw):
+        return self.gaussian(
+            sf, ampc, ampg, ampm, ampw
+        )
 
     def f_t(self, fts, t, sf):
         return fts*sf+t
@@ -164,14 +179,15 @@ class SGCCircuit(tf.Module):
         self,
         sfs, 
         fts, t,
-        fas, a,
+        ampc, ampm, 
+        ampg, ampw,
         d
     ):
         # Make the rest of the variables broadcastable
         f = self.gaussian(
             self.T,
             self.f_t(fts, t, sfs),
-            self.f_amp(fas, a, sfs),
+            self.f_amp(sfs,ampc, ampm, ampg, ampw),
             self.mid, d
         )
 
@@ -182,27 +198,31 @@ class SGCCircuit(tf.Module):
             sfs,
     ):
         # reshape the SF input to broadcast across multiple exploration samples
-        sfs = tf.reshape(sfs, [1,1,1,-1,1])
+        self.sfs = tf.reshape(sfs, [1,1,1,-1,1])
 
         # Transform the scaled variables before doing calculations
         self.update_transform()
 
         self.dlgn_exc = self.frf(
-            sfs,
+            self.sfs,
             self.params['dLGN_params'][:,:,:,0,:,:], 
             self.params['dLGN_params'][:,:,:,1,:,:],
             self.params['dLGN_params'][:,:,:,2,:,:],
             self.params['dLGN_params'][:,:,:,3,:,:],
-            self.params['dLGN_params'][:,:,:,4,:,:]
+            self.params['dLGN_params'][:,:,:,4,:,:],
+            self.params['dLGN_params'][:,:,:,5,:,:],
+            self.params['dLGN_params'][:,:,:,6,:,:],
         )
 
         self.dlgn_inh = self.params['V1_params'][:,:,:,1,:,:] * self.frf(
-            sfs,
+            self.sfs,
             self.params['dLGN_params'][:,:,:,0,:,:],
             self.params['dLGN_params'][:,:,:,1,:,:] + self.params['V1_params'][:,:,:,0,:,:],
             self.params['dLGN_params'][:,:,:,2,:,:],
             self.params['dLGN_params'][:,:,:,3,:,:],
-            self.params['dLGN_params'][:,:,:,4,:,:]
+            self.params['dLGN_params'][:,:,:,4,:,:],
+            self.params['dLGN_params'][:,:,:,5,:,:],
+            self.params['dLGN_params'][:,:,:,6,:,:],
         )
 
         self.v1_exc = tf.reduce_sum(self.dlgn_exc, axis = 2)
@@ -214,7 +234,7 @@ class SGCCircuit(tf.Module):
     def update_transform(self):
 
         # Transform the normalized variables back into their meaningful scale
-        dlgn_bounds = tf.convert_to_tensor([x for x in self.bounds.values()])[:5]
+        dlgn_bounds = tf.convert_to_tensor([x for x in self.bounds.values()])[:-2]
         dlgn_lower = tf.reshape(dlgn_bounds[:,0], [1,1,1,-1,1,1])
         dlgn_upper = tf.reshape(dlgn_bounds[:,1], [1,1,1,-1,1,1])
 
@@ -229,10 +249,18 @@ class SGCCircuit(tf.Module):
         }
 
 class Optimize:
-    def __init__(self, model, epochs = 50, loss_threshold = 0.105):
+    def __init__(
+            self, model, 
+            epochs = 50, loss_threshold = 0.105,
+            flatness_lambda = 1e-3, flatness_epsilon = 1e-6,
+            highpass_lambda = 1e-3
+    ):
         self.model = model
         self.epochs = epochs
         self.loss_threshold = loss_threshold
+        self.flatness_lambda = flatness_lambda
+        self.flatness_epsilon = flatness_epsilon
+        self.highpass_lambda = highpass_lambda
 
         if hasattr(tf.keras.optimizers, "AdamW"):
             self.optimizer = tf.keras.optimizers.AdamW()
@@ -248,8 +276,20 @@ class Optimize:
     def train_step(self, opt, X, Y_true):
         
         with tf.GradientTape() as tape:
+
+            ## calculate a penalty on the flatness of the SF amplitude tuning curve
+            
+            # get the amplitude tuning curve
+            amp_tuning = self.model.f_amp(
+                X,
+                self.model.params['dLGN_params'][:,:,:,2,:,:],
+                self.model.params['dLGN_params'][:,:,:,3,:,:],
+                self.model.params['dLGN_params'][:,:,:,4,:,:],
+                self.model.params['dLGN_params'][:,:,:,5,:,:],
+            )
+
             Y_pred = self.model.predict(X)
-            loss = self.mse(Y_pred, Y_true)
+            loss = self.mse(Y_pred, Y_true) 
 
         # First, find the exploration samples that have converged
         # 1 for all exploration samples that HAVE converged.
@@ -261,7 +301,7 @@ class Optimize:
         # mask each variable separately:
         self.gradients = tape.gradient(loss, self.model.trainable_variables)
 
-        masked_gradients = []
+        self.masked_gradients = []
         for g in self.gradients: # iterate through each trainable variable
 
             # Expand mask to match parameter rank
@@ -274,8 +314,9 @@ class Optimize:
             # Apply the mask to the gradients of the given trainable variable.
             # For exploration samples with a loss under the threshold, the gradients
             # will now be set to 0. 
-            masked_gradients.append(g * gmask)
-        opt.apply_gradients(zip(masked_gradients, self.model.trainable_variables))   
+            self.masked_gradients.append(g * gmask)
+        
+        opt.apply_gradients(zip(tuple(self.masked_gradients), self.model.trainable_variables))   
         return loss
 
     def fit(self, X, Y_true, output_dtype = np.float16):
@@ -284,7 +325,7 @@ class Optimize:
         native_params = [x.name.split(':')[0] for x in self.model.trainable_variables]
         native_to_defined = np.array([native_params.index(x) for x in defined_params])
 
-        elems = [(self.model.n_lgn,5),(1,2)]
+        elems = [(self.model.n_lgn,7), (1,2)]
         self.param_history = {
             key: np.zeros([self.model.n_sample, self.epochs, self.model.n_v1, elem[0], elem[1], 1, 1])
             for key, elem in zip(list(self.model.params.keys()), elems)
@@ -318,6 +359,7 @@ class Optimize:
                 self.param_history[key][:,i,:,:,:] = tf.identity(value).numpy().astype(output_dtype)
                 self.scaled_param_history[key][:,i,:,:,:] = tf.identity(self.model.trainable_variables[idx]).numpy().astype(output_dtype)
                 self.gradient_history[key][:,i,:,:,:] = tf.identity(self.gradients[idx]).numpy().astype(output_dtype)
+                
         self.save_state("_", write=False)
         return tf.convert_to_tensor(self.loss_decay)
     
