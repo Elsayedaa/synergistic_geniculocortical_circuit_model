@@ -15,7 +15,7 @@ The purpose of this project is to create a simple computational model of the gen
 ### Model Parameters:
 
 Model parameters are split into dLGN parameters and V1 parameters.
-$\sigma$
+
 dLGN parameters: The dLGN response is a Gaussian function with respect to SF and time.
 The temporal bandwidth (duration of the response) is controlled by the &\sigma& parameter.
 The center of the Gaussian is controlled by a linear function of SF with a frequency-time 
@@ -23,7 +23,7 @@ intercept and a frequency-time slope. The amplitude is controlled by another Gau
 of SF with its own center, midline, gain (amplitude), and tuning bandwidth. Below is a breakdown
 of all the tunable dLGN parameters: 
 
-    Temporal bandwidth $\sigma$ - Controls the time duration of each SF evoked response.
+    Temporal bandwidth ($`\sigma`$) - Controls the time duration of each SF evoked response.
     
     Frequency-time intercept (fti) - The intercept of $\mu$(f). Controls the initial onset timing 
     of the SF evoked response.
