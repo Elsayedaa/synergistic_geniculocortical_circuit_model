@@ -17,7 +17,7 @@ The purpose of this project is to create a simple computational model of the gen
 Model parameters are split into dLGN parameters and V1 parameters.
 
 dLGN parameters: The dLGN response is a Gaussian function with respect to SF and time.
-The temporal bandwidth (duration of the response) is controlled by the &\sigma& parameter.
+The temporal bandwidth (duration of the response) is controlled by the (σ) parameter.
 The center of the Gaussian is controlled by a linear function of SF with a frequency-time 
 intercept and a frequency-time slope. The amplitude is controlled by another Gaussian function
 of SF with its own center, midline, gain (amplitude), and tuning bandwidth. Below is a breakdown
@@ -25,22 +25,22 @@ of all the tunable dLGN parameters:
 
     Temporal bandwidth (σ) - Controls the time duration of each SF evoked response.
     
-    Frequency-time intercept (fti) - The intercept of $\mu$(f). Controls the initial onset timing 
+    Frequency-time intercept (fti) - The intercept of μ(f). Controls the initial onset timing 
     of the SF evoked response.
     
-    Frequency-time slope (fts) - The slope of $\mu$(f). Controls the relative timing of SF evoked 
+    Frequency-time slope (fts) - The slope of μ(f). Controls the relative timing of SF evoked 
     responses for values above 0 c/d. Relates to the "coarse-to-fine" dynamics of the response.
     
-    Amplitude center (ampc) - The mean of $\alpha$(f). This is the frequency at the peak of the 
+    Amplitude center (ampc) - The mean of α(f). This is the frequency at the peak of the 
     unit's SF tuning curve. 
 
-    Amplitude midline (ampm) - The midline of $\alpha$(f). Controls the baseline amplitude across the 
+    Amplitude midline (ampm) - The midline of α(f). Controls the baseline amplitude across the 
     unit's entire SF tuning curve.
 
-    Amplitude gain (ampg) - The amplitude of $\alpha$(f). Controls the peak amplitude of the preferred 
+    Amplitude gain (ampg) - The amplitude of α(f). Controls the peak amplitude of the preferred 
     SF in the unit's SF tuning curve.
 
-    Amplitude bandwidth (ampw) - The standard deviation of $\alpha$(f). Controls the sharpness of the
+    Amplitude bandwidth (ampw) - The standard deviation of α(f). Controls the sharpness of the
     unit's SF tuning curve.
 
 Schematic showing what each dLGN parameter controls:
