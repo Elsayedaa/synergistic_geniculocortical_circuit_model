@@ -23,7 +23,7 @@ intercept and a frequency-time slope. The amplitude is controlled by another Gau
 of SF with its own center, midline, gain (amplitude), and tuning bandwidth. Below is a breakdown
 of all the tunable dLGN parameters: 
 
-    Temporal bandwidth ($`\sigma`$) - Controls the time duration of each SF evoked response.
+    Temporal bandwidth (\sigma) - Controls the time duration of each SF evoked response.
     
     Frequency-time intercept (fti) - The intercept of $\mu$(f). Controls the initial onset timing 
     of the SF evoked response.
