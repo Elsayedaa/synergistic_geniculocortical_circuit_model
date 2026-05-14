@@ -1,0 +1,88 @@
+<svg width="1489" height="590" viewBox="0 0 1489 590" xmlns="http://www.w3.org/2000/svg">
+
+  <style>
+    .node { fill: none; stroke: black; stroke-width: 2.2; }
+    .edge { stroke: black; stroke-width: 2.2; }
+    .label { font-family: Arial, sans-serif; font-size: 16px; text-anchor: middle; dominant-baseline: middle; }
+  </style>
+
+  <!-- LEFT dLGN -->
+  <circle class="node" cx="200" cy="150" r="48"/>
+  <text class="label" x="200" y="150">dLGN1-1</text>
+
+  <circle class="node" cx="200" cy="270" r="48"/>
+  <text class="label" x="200" y="270">dLGN2-1</text>
+
+  <circle class="node" cx="200" cy="390" r="48"/>
+  <text class="label" x="200" y="390">dLGN3-1</text>
+
+  <!-- LEFT V1 -->
+  <polygon class="node" points="470,150 420,260 520,260"/>
+  <text class="label" x="470" y="225">V1_1 EXC</text>
+
+  <polygon class="node" points="470,410 420,300 520,300"/>
+  <text class="label" x="470" y="335">V1_1 INH</text>
+
+  <!-- LEFT TOTAL -->
+  <polygon class="node" points="720,250 680,300 720,350 760,300"/>
+  <text class="label" x="720" y="300">V1_1 Total</text>
+
+  <!-- RIGHT TOTAL -->
+  <polygon class="node" points="860,250 820,300 860,350 900,300"/>
+  <text class="label" x="860" y="300">V1_2 Total</text>
+
+  <!-- RIGHT V1 -->
+  <polygon class="node" points="1110,150 1060,260 1160,260"/>
+  <text class="label" x="1110" y="225">V1_2 EXC</text>
+
+  <polygon class="node" points="1110,410 1060,300 1160,300"/>
+  <text class="label" x="1110" y="335">V1_2 INH</text>
+
+  <!-- RIGHT dLGN -->
+  <circle class="node" cx="1350" cy="150" r="48"/>
+  <text class="label" x="1350" y="150">dLGN1-2</text>
+
+  <circle class="node" cx="1350" cy="270" r="48"/>
+  <text class="label" x="1350" y="270">dLGN2-2</text>
+
+  <circle class="node" cx="1350" cy="390" r="48"/>
+  <text class="label" x="1350" y="390">dLGN3-2</text>
+
+  <!-- LEFT CONNECTIONS -->
+  <line class="edge" x1="248" y1="150" x2="420" y2="230"/>
+  <line class="edge" x1="248" y1="150" x2="420" y2="310"/>
+
+  <line class="edge" x1="248" y1="270" x2="420" y2="230"/>
+  <line class="edge" x1="248" y1="270" x2="420" y2="310"/>
+
+  <line class="edge" x1="248" y1="390" x2="420" y2="230"/>
+  <line class="edge" x1="248" y1="390" x2="420" y2="310"/>
+
+  <line class="edge" x1="520" y1="260" x2="680" y2="300"/>
+  <line class="edge" x1="520" y1="300" x2="680" y2="300"/>
+
+  <!-- RIGHT CONNECTIONS -->
+  <line class="edge" x1="900" y1="300" x2="1060" y2="230"/>
+  <line class="edge" x1="900" y1="300" x2="1060" y2="310"/>
+
+  <line class="edge" x1="1160" y1="230" x2="1302" y2="150"/>
+  <line class="edge" x1="1160" y1="230" x2="1302" y2="270"/>
+  <line class="edge" x1="1160" y1="230" x2="1302" y2="390"/>
+
+  <line class="edge" x1="1160" y1="310" x2="1302" y2="150"/>
+  <line class="edge" x1="1160" y1="310" x2="1302" y2="270"/>
+  <line class="edge" x1="1160" y1="310" x2="1302" y2="390"/>
+
+  <!-- ARROWS -->
+  <line class="edge" x1="720" y1="430" x2="720" y2="350"/>
+  <polygon points="720,340 712,360 728,360" fill="black"/>
+
+  <line class="edge" x1="860" y1="430" x2="860" y2="350"/>
+  <polygon points="860,340 852,360 868,360" fill="black"/>
+
+  <!-- Caption -->
+  <text class="label" x="744" y="520" style="font-size:18px;">
+    The model simulates the response of two V1 neurons to stimuli of different spatial frequencies (SF)
+  </text>
+
+</svg>

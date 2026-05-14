@@ -232,6 +232,13 @@ class SGCCircuit(tf.Module):
         return self.Y
     
     def update_transform(self):
+        if str(type(self.bounds)) == "<class 'tensorflow.python.trackable.data_structures.ListWrapper'>":
+            self.update_transform_separate()
+        else:
+            self.update_transform_joint()
+            
+    
+    def update_transform_joint(self):
 
         # Transform the normalized variables back into their meaningful scale
         dlgn_bounds = tf.convert_to_tensor([x for x in self.bounds.values()])[:-2]
@@ -247,6 +254,62 @@ class SGCCircuit(tf.Module):
             'dLGN_params': self.variable_transformer(self.dlgn_scaled, dlgn_lower, dlgn_upper),
             'V1_params': self.variable_transformer(self.v1_scaled, v1_lower, v1_upper)
         }
+
+    def update_transform_separate(self):
+
+        ## Extract dlgn bounds
+        dlgn_bounds = [
+            tf.convert_to_tensor([x for x in inner_bounds.values()])[:-2]
+            for inner_bounds in self.bounds
+        ]
+        dlgn_lower = [
+            tf.reshape(inner_bounds[:,0], [1,1,-1,1,1])
+            for inner_bounds in dlgn_bounds
+        ]
+        dlgn_upper = [
+            tf.reshape(inner_bounds[:,1], [1,1,-1,1,1])
+            for inner_bounds in dlgn_bounds
+        ]
+
+        # Extract v1 bounds
+        v1_bounds = [
+            tf.convert_to_tensor([x for x in inner_bounds.values()])[-2:]
+            for inner_bounds in self.bounds
+        ]
+        v1_lower = [
+            tf.reshape(inner_bounds[:,0], [1,1,-1,1,1])
+            for inner_bounds in v1_bounds
+        ]
+        v1_upper = [
+            tf.reshape(inner_bounds[:,1], [1,1,-1,1,1])
+            for inner_bounds in v1_bounds
+        ]
+
+        dlgn_unstacked = []
+        v1_unstacked = []
+        for i in range(self.n_v1):
+            
+            dlgn_unstacked.append(
+                self.variable_transformer(
+                self.dlgn_scaled[:,i,:,:,:,:], 
+                dlgn_lower[i], 
+                dlgn_upper[i]
+                )
+            )
+
+            v1_unstacked.append(
+                self.variable_transformer(
+                self.v1_scaled[:,i,:,:,:,:], 
+                v1_lower[i], 
+                v1_upper[i]
+                )
+            )
+
+        self.params = {
+            'dLGN_params': tf.stack(dlgn_unstacked, axis=1),
+            'V1_params': tf.stack(v1_unstacked, axis=1)
+        }
+
 
 class Optimize:
     def __init__(

@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import sys
 sys.path.append(os.path.join('c:\\', *os.getcwd().split('\\')[1:-1]))
-from sgcc import *
+from sgcc11 import *
 
 # define the model input
 X = tf.convert_to_tensor([0.02,0.04,0.08,0.1,0.12,0.16,0.2,0.24,0.28,0.32], dtype = tf.float32)
@@ -60,4 +60,4 @@ optimizer = Optimize(model, epochs=20000, loss_threshold=0)
 optimizer.fit(X, Y_true)
 
 # save the result
-optimizer.save_state('sgcc_full_population_2_28_26', write=True)
+optimizer.save_state(os.path.join('c:\\', *os.getcwd().split('\\')[1:-1], 'project_datafiles', 'sgcc_full_population_4_27_26_2.pkl'), write=True)

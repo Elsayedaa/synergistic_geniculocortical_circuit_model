@@ -1,0 +1,5 @@
+__pycache__/
+anaconda_projects/
+analysis/anaconda_projects/
+analysis/.ipynb_checkpoint
+project_datafiles/
