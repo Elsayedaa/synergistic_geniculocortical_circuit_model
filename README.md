@@ -1,10 +1,18 @@
-## Synergistic Geniculocortical Circuit Model (SGCC)
+# Synergistic Geniculocortical Circuit Model (SGCC)
 
-The purpose of this project is to create a simple computational model of the geniculocortical pathway in the mouse visual system to understand and characterize the circuit motifs that enable the efficient spatial frequency (SF) codes described in Elsayed (2025). The following are questions addressed by the model:
+### Author summary for upcoming manuscript:
 
-1) What are the functional properties of dLGN units that preferentially connect to distinct V1 units?
-2) What are the inhibitory dynamics driving each distinct V1 unit?
-3) What happens to SF decorrelation if coarse-to-fine processing and/or inhibition are turned off in the system?
+When visual information enters the early stages of the visual system, it elicits patterns of neuronal activity that encode stimulus features. These codes are more efficient and support better feature discrimination when different stimuli elicit distinct and uncorrelated activity patterns. Population activity patterns depend on how neurons with different functional properties are organized within circuits. We wanted to understand how the functional configuration of circuits connecting the dorsal lateral geniculate nucleus and primary visual cortex enable the decorrelation of spatial frequency-evoked activity patterns. We explored these configurations in a simple computational model that simulates joint geniculate and cortical activity via connected subunits. The model predicted two complementary circuit configurations that recreated the most important underlying dynamics for differentiating SF-evoked activity. These configurations were primarily constrained by the temporal characteristics of geniculate responses and cortical inhibition rather than how strongly individual thalamic units responded to specific spatial frequencies. These findings provide testable predictions about the organization of visual circuits and highlight the importance of temporal organization in efficient coding. 
+
+### Questions addressed in the project: 
+
+1) How are dLGN units with different functional properties organized within the geniculocortical circuit?
+2) What are the inhibitory dynamics driving individual circuit motifs?
+3) What happens to SF decorrelation when:
+     - coarse-to-fine processing in dLGN is eliminated?
+     - cortical inhibition is eliminated?
+     - SF selectivity in dLGN is eliminated?
+4) How does SF processing contribute to natural image encoding in the visual system? 
 
 ### Model Architecture:
 
