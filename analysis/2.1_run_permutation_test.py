@@ -2,9 +2,10 @@ import os
 import tensorflow as tf
 import pandas as pd
 import sys
+import joblib
 from itertools import permutations
 sys.path.append(os.path.join('c:\\', *os.getcwd().split('\\')[1:-1]))
-from sgcc11 import *
+from sgcc import *
 
 # set the parameter bounds
 param_bounds = {
@@ -102,6 +103,8 @@ optimized_permutation_params = {
     'dLGN_params': np.concatenate(optimized_permutation_params['dLGN_params'], axis=0), 
     'V1_params': np.concatenate(optimized_permutation_params['V1_params'], axis=0)
 }
+
+# save result
 result =  {
     'loss_decay': np.concatenate(permutation_loss_decay, axis = 1), 
     'params': optimized_permutation_params
@@ -109,3 +112,25 @@ result =  {
 
 with open(os.path.join('c:\\', *os.getcwd().split('\\')[1:-1], 'project_datafiles', 'permutation_test_top120_multi_sample.pkl'), 'wb') as f:
     pickle.dump(result, f)
+
+# save the best permutation
+msl = result['loss_decay'][-1].reshape(100,120)
+msl_i1 = np.argsort(msl.mean(0))
+params = result['params']['dLGN_params'].reshape(100,120,2,3,7)
+
+p_top = params[0,msl_i1[0]][None,:,:,:]
+op_perm = np.argsort(np.argsort(p_top, axis=2), axis=2).transpose(0,3,1,2)
+P = tf.one_hot(
+    op_perm,
+    3,
+    axis=-1,
+)
+P = tf.transpose(P, (0,1,2,4,3))
+
+P = tf.where(P == 1.0, 
+                  tf.ones_like(P) * 10.0,   # large positive
+                  tf.ones_like(P) * -10.0)  # large negative
+
+P = np.squeeze(np.tile(P, [4000, 1, 1, 1, 1, 1]))
+
+joblib.dump(P,os.path.join('c:\\', *os.getcwd().split('\\')[1:-1], 'project_datafiles', 'best_permutation.pkl'))

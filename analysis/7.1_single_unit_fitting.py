@@ -9,13 +9,13 @@ import numpy as np
 import pandas as pd
 import sys
 sys.path.append(os.path.join('c:\\', *os.getcwd().split('\\')[1:-1]))
-from sgcc11 import *
+from sgcc import *
 
 # define the model input
 X = tf.convert_to_tensor([0.02,0.04,0.08,0.1,0.12,0.16,0.2,0.24,0.28,0.32], dtype = tf.float32)
 
 ## load and preprocess V1 data
-v1_file = v1_xs_file = os.path.join('c:\\', *os.getcwd().split('\\')[1:-1], 'project_datafiles', 'v1_data_sfresp_at_all_ori_phase_full.pkl')
+v1_file = os.path.join('c:\\', *os.getcwd().split('\\')[1:-1], 'project_datafiles', 'v1_data_sfresp_at_all_ori_phase_full.pkl')
 
 # Data at all ori/phase combos
 v1 = pd.read_pickle(v1_file)

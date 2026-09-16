@@ -8,12 +8,29 @@ class SGCCircuit(tf.Module):
     def __init__(
             self,
             bounds,
+            T = 250,
+            identify = True,
+            enforce_permutation = False
     ):
         super().__init__(name = 'SGCC')
 
         ## Set the bounds on the trainable parameters
         self.bounds = bounds
         self.GBOUND = 6
+
+        self.T = T
+        self.identify = identify
+        self.permutation = enforce_permutation
+        if self.identify == False:
+            if str(type(self.permutation)) in [
+                "<class 'numpy.ndarray'>", 
+                "<class 'tensorflow.python.framework.ops.EagerTensor'>"
+            ]:
+                raise _PermPassedWithNoID()
+            elif str(type(self.permutation)) == "<class 'str'>":
+                ## The default permutation: dLGN0<=dLGN1<=dLGN2 for all parameter classes
+                if ((self.permutation == 'any') or (self.permutation == 'default')):
+                    raise _PermPassedWithNoID()
 
     def variable_transformer(self, x, lower, upper, op = 'scale'):
         if op == 'scale':
@@ -24,6 +41,48 @@ class SGCCircuit(tf.Module):
             transformed = tf.math.log(n/(1-n))
             
         return transformed
+    
+    def initialize_neuron_order_permutation(self):
+        
+        # skip if indentifiability constraint is not required
+        if self.identify:
+            pass
+        else:
+            return None
+        
+        if str(type(self.permutation)) in [
+            "<class 'numpy.ndarray'>", 
+            "<class 'tensorflow.python.framework.ops.EagerTensor'>"
+        ]:
+            ## implement a user-defined permutation matrix
+            soft_perm = self.permutation
+            self.soft_perm = tf.Variable(soft_perm,
+                                        name = 'permutation_matrix', 
+                                        trainable = False, 
+                                        dtype = DTYPE,
+                                    )
+            
+        elif str(type(self.permutation)) == "<class 'str'>" or (self.permutation==False):
+            ## The default permutation: dLGN0<=dLGN1<=dLGN2 for all parameter classes
+            if (self.permutation == 'default') or (self.permutation == False):
+                self.soft_perm = None
+            
+            elif self.permutation == 'any':
+                ## Enforces an identifiable permutation by optimizing a permutation
+                ## matrix with values chosen randomly from a normal distribution & 
+                ## applying Sinkhorn relaxation. Not gauranteed to have sharp 1s and 
+                ## 0s and will probably distort the parameters going into model.predict().
+                ## Use with caution. 
+                soft_perm = tf.random.normal((7, self.n_v1, self.n_lgn, self.n_lgn), mean = 0, stddev = 1)
+                soft_perm = tf.tile(
+                    tf.expand_dims(soft_perm, axis=0),
+                    [self.n_sample, 1, 1, 1, 1]
+                )
+                self.soft_perm = tf.Variable(soft_perm,
+                                            name = 'permutation_matrix', 
+                                            trainable = True, 
+                                            dtype = DTYPE,
+                                        )
 
     def initialize_random_parameters(self, n_v1, n_lgn, n_sample):
         self.n_sample = n_sample
@@ -31,7 +90,7 @@ class SGCCircuit(tf.Module):
         self.n_lgn = n_lgn
 
         ## Fixed parameters
-        self.T = tf.reshape(tf.cast(tf.linspace(0,250,250), dtype = DTYPE), [1, 1, 1, 1,-1])
+        self.T = tf.reshape(tf.cast(tf.linspace(0,self.T,self.T), dtype = DTYPE), [1, 1, 1, 1,-1])
         self.mid = tf.cast(tf.fill([self.n_sample, n_v1, n_lgn, 1, 1], 0), dtype = DTYPE)
 
         ## Trainable parameters
@@ -50,40 +109,83 @@ class SGCCircuit(tf.Module):
                                      dtype = DTYPE,
                                      )
         
+        self.initialize_neuron_order_permutation()
         self.update_transform()
 
     def load_saved_parameters(self, parameters):
         self.n_sample, self.n_v1, self.n_lgn = parameters['dLGN_params'].shape[:3]
 
         ## Fixed parameters
-        self.T = tf.reshape(tf.cast(tf.linspace(0,250,250), dtype = DTYPE), [1, 1, 1, 1,-1])
+        self.T = tf.reshape(tf.cast(tf.linspace(0,self.T,self.T), dtype = DTYPE), [1, 1, 1, 1,-1])
         self.mid = tf.cast(tf.fill([self.n_sample, self.n_v1, self.n_lgn, 1, 1], 0), dtype = DTYPE)
 
         self.dlgn_raw = tf.Variable(parameters['dLGN_params'], name = 'dLGN_params', trainable = True, dtype = DTYPE)
         self.v1_scaled = tf.Variable(parameters['V1_params'], name = 'V1_params', trainable = True, dtype = DTYPE)
 
+        self.initialize_neuron_order_permutation()
         self.update_transform()
+
+    def sinkhorn(self, log_alpha, n_iters=10, temperature=1):
+        log_alpha = log_alpha/temperature
+        for i in range(n_iters):
+            log_alpha = log_alpha - tf.math.reduce_logsumexp(log_alpha, axis=-1, keepdims=True)
+            log_alpha = log_alpha - tf.math.reduce_logsumexp(log_alpha, axis=-2, keepdims=True)
+        return tf.exp(log_alpha)
 
     @property # apply the necessary reparameterizations
     def dlgn_scaled(self):
+        if self.identify:
 
-        ## apply identifiability constraint (dLGN0<=dLGN1<=dLGN2)
-        leading_unit = self.dlgn_raw[:, :, 0:1, ...] # leading dLGN unit
-        trailing_offsets = tf.nn.softplus( # values added to consecutive dLGN units (enforce positive vals)
-            self.dlgn_raw[:, :, 1:, ...]
-        ) 
+            ## apply identifiability constraint (dLGN0<=dLGN1<=dLGN2)
+            leading_unit = self.dlgn_raw[:, :, 0:1, ...] # leading dLGN unit
+            trailing_offsets = tf.nn.softplus( # values added to consecutive dLGN units (enforce positive vals)
+                self.dlgn_raw[:, :, 1:, ...]
+            ) 
 
-        # get the values of the trailing units by adding the offsets to the leading unit
-        trailing_units = leading_unit + tf.cumsum(trailing_offsets, axis=2)
-        ordered_units = tf.concat([leading_unit, trailing_units], axis=2)
+            # get the values of the trailing units by adding the offsets to the leading unit
+            trailing_units = leading_unit + tf.cumsum(trailing_offsets, axis=2)
+            ordered_units = tf.concat([leading_unit, trailing_units], axis=2)
 
-        return ordered_units
+            if np.any(self.soft_perm):
+                # apply the order permutation
+                P = self.sinkhorn(self.soft_perm)
+                D = ordered_units[:,:,:,:,0,0]
+                D = tf.transpose(D, (0,3,1,2))[:,:,:,None,:]
+                D = tf.squeeze(tf.matmul(D, P), [-2])
+                D = tf.transpose(D, (0,2,3,1))[:,:,:,:,None,None]
+                # print('Model initialized with pre-defined permutation.')
+                # if type(self.permutation) == str:
+                #     print(f'permutation = {self.permutation}')
+                # else:
+                #     print('permutation = user defined')
+                return D
+            
+            else:
+                #print('Model initialized with default permutation')
+                return ordered_units
+        else:
+            return self.dlgn_raw
     
     def inverse_dlgn_property(self, ordered_units):
         ## invert the dLGN reparameterization (for loading parameters and reinitialization)
 
-        leading_unit = ordered_units[:,:,0]
-        trailing_offsets = ordered_units[:,:,1:] - ordered_units[:,:,:-1]
+        ## Get the inverse permutation matrix
+        params = ordered_units[:,:,:,:,0,0] 
+        op_perm = np.argsort(np.argsort(params, axis=2), axis=2).transpose(0,3,1,2)
+        P = tf.one_hot(
+            op_perm,
+            3,
+            axis=-1,
+        )
+
+        ## Apply the inverse permutation
+        D = tf.transpose(params, (0,3,1,2))[:,:,:,None,:]
+        D = tf.squeeze(tf.matmul(D, P), [-2])
+        D = tf.transpose(D, (0,2,3,1))[:,:,:,:,None,None]
+
+        # Invert the identifiability
+        leading_unit = D[:,:,0]
+        trailing_offsets = D[:,:,1:] - D[:,:,:-1]
         trailing_offsets = tf.math.log(tf.math.expm1(trailing_offsets)) # apply an approximate inverse softplus
         dlgn_recov = np.concatenate([leading_unit[:,:,None,:,:,:], trailing_offsets], axis = 2)
 
@@ -107,23 +209,37 @@ class SGCCircuit(tf.Module):
         if brain_area == 'dLGN':
             bounds = [x for x in self.bounds.values()][:-2]
             lower, upper = bounds[control_map['dLGN'][param]]
+            incices = []
+            values = []
+
+            # construct the indices and values for scatter_nd_update
             for v1_unit in v1_units:
                 for dlgn_unit in dlgn_units:
                     for sample in samples:
+                        incices.append([sample,v1_unit,dlgn_unit,control_map['dLGN'][param],0,0])
+                        values.append(self.variable_transformer(value, lower, upper, op = 'normalize'))
                         
-                        # update the scaled reparameterized variable
-                        new_dlgn_scaled = tf.tensor_scatter_nd_update(
-                            self.dlgn_scaled, 
-                            [[sample,v1_unit,dlgn_unit,control_map['dLGN'][param],0,0]], 
-                            [self.variable_transformer(value, lower, upper, op = 'normalize')]
-                        )
+            # update the scaled reparameterized variable
+            new_dlgn_scaled = tf.tensor_scatter_nd_update(
+                self.dlgn_scaled, 
+                incices, 
+                values
+            )
 
-                        # apply the inverse property
-                        self.dlgn_raw = tf.Variable(self.inverse_dlgn_property(new_dlgn_scaled), 
-                                       name = 'dLGN_params', 
-                                       trainable = True, 
-                                       dtype = DTYPE,
-                                       )
+            if self.identify:
+                # apply the inverse property
+                self.dlgn_raw = tf.Variable(self.inverse_dlgn_property(new_dlgn_scaled), 
+                            name = 'dLGN_params', 
+                            trainable = True, 
+                            dtype = DTYPE,
+                            )
+                
+            else :
+                self.dlgn_raw = tf.Variable(new_dlgn_scaled, 
+                            name = 'dLGN_params', 
+                            trainable = True, 
+                            dtype = DTYPE,
+                            )                            
 
         if brain_area == 'V1':
             bounds = [x for x in self.bounds.values()][-2:]
@@ -151,21 +267,6 @@ class SGCCircuit(tf.Module):
         f = tf.math.exp(-1*(((support-ctr)**2)/(2*std**2)))
 
         return mid+(amp*f)
-    
-    def gaussian_gradient( # calculate the derivative of a gaussian
-        self,
-        support,
-        ctr, 
-        amp, 
-        mid, 
-        std 
-    ):
-        fg = self.gaussian(
-            support, ctr, amp, mid, std 
-        )
-        
-        dGdX = -fg * ((support - ctr)/(std**2))
-        return dGdX
 
     def f_amp(self, sf, ampc, ampm, ampg, ampw):
         return self.gaussian(
@@ -457,3 +558,17 @@ class Optimize:
         if write:
             with open(f"{file_identifier}.pkl", 'wb') as f:
                 pickle.dump(self.outputs, f)
+
+class _PermPassedWithNoID(Exception):
+    """
+    Exception raised for when the user sets identify = False
+    when initializing the model but tries to pass something to
+    enforce_permutation
+    """
+
+    def __init__(self):
+        self.message = f"""
+        User passed an argument to "enforce_permutation" while identify
+        was set to False.
+        """
+        super().__init__(self.message)
